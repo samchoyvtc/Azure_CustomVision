@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Azure Custom Vision — Image Classifier</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="app">
+    <header class="header">
+      <h1>Azure Custom Vision</h1>
+      <p class="status{% if status_error %} status--error{% endif %}">{{ status }}</p>
+    </header>
+
+    <form class="upload-form" method="post" action="/" enctype="multipart/form-data">
+      <label class="file-picker">
+        <span class="file-picker-title">Choose an image</span>
+        <span class="file-picker-sub">JPEG, PNG, WebP, and other common formats</span>
+        <input id="image" name="image" type="file" accept="image/*" required>
+      </label>
+      <button type="submit">Classify Image</button>
+    </form>
+
+    {% if image_url %}
+    <div class="preview">
+      <img src="{{ image_url }}" alt="Uploaded image">
+    </div>
+    {% endif %}
+
+    {% if error or predictions %}
+    <section class="results">
+      <h2 class="results-title">Results</h2>
+
+      {% if error and not predictions %}
+      <p class="top-result top-result--error">{{ error }}</p>
+      {% endif %}
+
+      {% if top_result %}
+      <p class="top-result {{ top_class }}">{{ top_result }}</p>
+      {% endif %}
+
+      {% if predictions %}
+      <ul class="prediction-list">
+        {% for item in predictions %}
+        <li class="prediction-item">
+          <span class="prediction-label">{{ item.tagName }}</span>
+          <span class="prediction-percent">{{ item.percent }}%</span>
+          <div class="prediction-bar">
+            <div class="prediction-bar-fill" style="width: {{ item.percent }}%"></div>
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </section>
+    {% endif %}
+  </main>
+</body>
+</html>
