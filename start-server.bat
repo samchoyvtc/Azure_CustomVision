@@ -2,12 +2,6 @@
 setlocal
 cd /d "%~dp0"
 
-if not exist config.py (
-  echo Missing config.py — copy config.example.py to config.py and fill in your Azure credentials.
-  pause
-  exit /b 1
-)
-
 where python >nul 2>&1
 if errorlevel 1 (
   where python3 >nul 2>&1

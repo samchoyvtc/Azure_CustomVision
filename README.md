@@ -1,6 +1,6 @@
 # Azure Custom Vision — Image Classifier
 
-A Python (Flask) web app that lets you upload an image and classify it with Azure Custom Vision. The Prediction API key stays on the server — no JavaScript frontend logic.
+A Python (Flask) web app that lets you paste your Azure Custom Vision Prediction URL and key, upload an image, and see classification results.
 
 ## Prerequisites
 
@@ -9,28 +9,11 @@ A Python (Flask) web app that lets you upload an image and classify it with Azur
 
 ## Setup
 
-1. Copy the config template:
-
-   ```bash
-   cp config.example.py config.py
-   ```
-
-2. Edit `config.py` with values from your Custom Vision **Prediction URL**:
-
-   ```python
-   ENDPOINT = "https://your-resource.cognitiveservices.azure.com"
-   PREDICTION_KEY = "your-prediction-key"
-   PROJECT_ID = "your-project-guid"
-   ITERATION_NAME = "Iteration1"
-   ```
-
-3. Create a virtual environment and install dependencies:
-
-   ```bash
-   python3 -m venv .venv
-   source .venv/bin/activate   # Windows: .venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
+```bash
+python3 -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
 
 ## Run
 
@@ -48,12 +31,20 @@ python server.py
 
 Open http://127.0.0.1:8080 in your browser.
 
-## How It Works
+## How to use
 
-1. Choose an image and click **Classify Image**.
-2. The Python backend sends the image bytes to Azure Custom Vision.
-3. Predictions are rendered below the image (top label + confidence bars).
+1. Paste your **Prediction URL** from the Custom Vision portal, for example:
+
+   ```
+   https://s23res-prediction.cognitiveservices.azure.com/customvision/v3.0/Prediction/9cab5382-3362-4f4a-8832-d28741592237/classify/iterations/Iteration1/image
+   ```
+
+   The app reads the endpoint, project ID, and iteration name from this URL.
+
+2. Enter your **Prediction Key**.
+3. Choose an image and click **Classify Image**.
+4. Results appear below the image (top label + confidence bars).
 
 ## Security Note
 
-`config.py` holds your Prediction key and is listed in `.gitignore`. Do not commit it.
+Credentials are entered in the browser form and sent only to your local Python server, which then calls Azure. Do not deploy this demo publicly without protecting access — Prediction keys should not be shared.

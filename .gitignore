@@ -1,4 +1,3 @@
-config.py
 __pycache__/
 *.pyc
 .venv/
@@ -6,3 +5,4 @@ venv/
 .env
 uploads/
 .DS_Store
+config.py

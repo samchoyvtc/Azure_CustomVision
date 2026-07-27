@@ -14,11 +14,40 @@
     </header>
 
     <form class="upload-form" method="post" action="/" enctype="multipart/form-data">
+      <section class="config-fields">
+        <label class="field">
+          <span class="field-label">Prediction URL</span>
+          <span class="field-hint">
+            Paste the full URL from Custom Vision (includes endpoint, project ID, and iteration name)
+          </span>
+          <input
+            type="url"
+            name="prediction_url"
+            required
+            placeholder="https://....cognitiveservices.azure.com/customvision/v3.0/Prediction/.../classify/iterations/Iteration1/image"
+            value="{{ prediction_url }}"
+          >
+        </label>
+
+        <label class="field">
+          <span class="field-label">Prediction Key</span>
+          <input
+            type="password"
+            name="prediction_key"
+            required
+            placeholder="Your Azure Prediction Key"
+            value="{{ prediction_key }}"
+            autocomplete="off"
+          >
+        </label>
+      </section>
+
       <label class="file-picker">
         <span class="file-picker-title">Choose an image</span>
         <span class="file-picker-sub">JPEG, PNG, WebP, and other common formats</span>
         <input id="image" name="image" type="file" accept="image/*" required>
       </label>
+
       <button type="submit">Classify Image</button>
     </form>
 

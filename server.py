@@ -5,34 +5,22 @@ from __future__ import annotations
 
 import base64
 import mimetypes
-import sys
+import re
 
 import requests
 from flask import Flask, render_template, request
 
-try:
-    import config
-except ImportError:
-    print("Missing config.py — copy config.example.py to config.py and fill in your Azure credentials.")
-    sys.exit(1)
-
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # 10 MB
 
+HOST = "127.0.0.1"
+PORT = 8080
 
-def config_is_valid() -> bool:
-    values = (
-        config.ENDPOINT,
-        config.PREDICTION_KEY,
-        config.PROJECT_ID,
-        config.ITERATION_NAME,
-    )
-    return all(
-        isinstance(value, str)
-        and value
-        and not (value.startswith("<") and value.endswith(">"))
-        for value in values
-    )
+PREDICTION_URL_PATTERN = re.compile(
+    r"^(https?://[^/\s]+)/customvision/v3\.0/Prediction/"
+    r"([^/\s]+)/classify/iterations/([^/\s]+)/(?:image|url)/?$",
+    re.IGNORECASE,
+)
 
 
 def confidence_class(probability: float) -> str:
@@ -43,19 +31,30 @@ def confidence_class(probability: float) -> str:
     return "top-result--low"
 
 
-def prediction_url() -> str:
-    endpoint = config.ENDPOINT.rstrip("/")
+def parse_prediction_url(raw_url: str) -> tuple[str, str, str]:
+    """Return endpoint, project_id, iteration_name from a Prediction URL."""
+    match = PREDICTION_URL_PATTERN.match(raw_url.strip())
+    if not match:
+        raise ValueError(
+            "Invalid Prediction URL. Expected a Custom Vision classify URL "
+            "ending in /image or /url."
+        )
+    endpoint, project_id, iteration_name = match.groups()
+    return endpoint.rstrip("/"), project_id, iteration_name
+
+
+def build_image_api_url(endpoint: str, project_id: str, iteration_name: str) -> str:
     return (
         f"{endpoint}/customvision/v3.0/Prediction/"
-        f"{config.PROJECT_ID}/classify/iterations/{config.ITERATION_NAME}/image"
+        f"{project_id}/classify/iterations/{iteration_name}/image"
     )
 
 
-def classify_image(image_bytes: bytes) -> list[dict]:
+def classify_image(image_bytes: bytes, api_url: str, prediction_key: str) -> list[dict]:
     response = requests.post(
-        prediction_url(),
+        api_url,
         headers={
-            "Prediction-Key": config.PREDICTION_KEY,
+            "Prediction-Key": prediction_key,
             "Content-Type": "application/octet-stream",
         },
         data=image_bytes,
@@ -63,9 +62,9 @@ def classify_image(image_bytes: bytes) -> list[dict]:
     )
 
     if response.status_code in (401, 403):
-        raise RuntimeError("Invalid API key")
+        raise RuntimeError("Invalid Prediction Key")
     if response.status_code == 404:
-        raise RuntimeError("Check project ID / iteration name")
+        raise RuntimeError("Check Prediction URL (project ID / iteration name)")
     if not response.ok:
         raise RuntimeError(f"API error ({response.status_code})")
 
@@ -84,64 +83,81 @@ def image_data_url(image_bytes: bytes, filename: str) -> str:
 
 @app.route("/", methods=["GET", "POST"])
 def index():
-    status = "Choose an image to classify"
+    status = "Enter your Azure settings, then choose an image"
     status_error = False
     error = None
     image_url = None
     top_result = None
     top_class = ""
     predictions: list[dict] = []
-
-    if not config_is_valid():
-        status = "Configure config.py before uploading"
-        status_error = True
+    prediction_url = ""
+    prediction_key = ""
 
     if request.method == "POST":
-        if not config_is_valid():
-            status = "Configure config.py before uploading"
+        prediction_url = (request.form.get("prediction_url") or "").strip()
+        prediction_key = (request.form.get("prediction_key") or "").strip()
+        uploaded = request.files.get("image")
+
+        if not prediction_url:
+            status = "Prediction URL is required"
             status_error = True
-            error = "Missing or incomplete Azure credentials in config.py"
+            error = "Please paste your Custom Vision Prediction URL"
+        elif not prediction_key:
+            status = "Prediction Key is required"
+            status_error = True
+            error = "Please enter your Prediction Key"
+        elif uploaded is None or not uploaded.filename:
+            status = "Please choose an image file"
+            status_error = True
+            error = "No image selected"
         else:
-            uploaded = request.files.get("image")
-            if uploaded is None or not uploaded.filename:
+            image_bytes = uploaded.read()
+            if not image_bytes:
                 status = "Please choose an image file"
                 status_error = True
-                error = "No image selected"
+                error = "Empty file"
             else:
-                image_bytes = uploaded.read()
-                if not image_bytes:
-                    status = "Please choose an image file"
+                image_url = image_data_url(image_bytes, uploaded.filename)
+                try:
+                    endpoint, project_id, iteration_name = parse_prediction_url(
+                        prediction_url
+                    )
+                    api_url = build_image_api_url(endpoint, project_id, iteration_name)
+                    raw_predictions = classify_image(
+                        image_bytes, api_url, prediction_key
+                    )
+
+                    if not raw_predictions:
+                        error = "No match"
+                        status = f"Classified: {uploaded.filename}"
+                    else:
+                        predictions = [
+                            {
+                                "tagName": item.get("tagName", "Unknown"),
+                                "percent": round(
+                                    float(item.get("probability", 0)) * 100
+                                ),
+                            }
+                            for item in raw_predictions
+                        ]
+                        top = predictions[0]
+                        top_result = f"{top['tagName']} — {top['percent']}%"
+                        top_class = confidence_class(
+                            raw_predictions[0].get("probability", 0)
+                        )
+                        status = f"Classified: {uploaded.filename}"
+                except ValueError as exc:
+                    status = "Invalid Prediction URL"
                     status_error = True
-                    error = "Empty file"
-                else:
-                    image_url = image_data_url(image_bytes, uploaded.filename)
-                    try:
-                        raw_predictions = classify_image(image_bytes)
-                        if not raw_predictions:
-                            error = "No match"
-                            status = f"Classified: {uploaded.filename}"
-                        else:
-                            predictions = [
-                                {
-                                    "tagName": item.get("tagName", "Unknown"),
-                                    "percent": round(float(item.get("probability", 0)) * 100),
-                                }
-                                for item in raw_predictions
-                            ]
-                            top = predictions[0]
-                            top_result = f"{top['tagName']} — {top['percent']}%"
-                            top_class = confidence_class(
-                                raw_predictions[0].get("probability", 0)
-                            )
-                            status = f"Classified: {uploaded.filename}"
-                    except requests.RequestException:
-                        status = "Connection failed"
-                        status_error = True
-                        error = "Connection failed"
-                    except RuntimeError as exc:
-                        status = str(exc)
-                        status_error = True
-                        error = str(exc)
+                    error = str(exc)
+                except requests.RequestException:
+                    status = "Connection failed"
+                    status_error = True
+                    error = "Connection failed"
+                except RuntimeError as exc:
+                    status = str(exc)
+                    status_error = True
+                    error = str(exc)
 
     return render_template(
         "index.html",
@@ -152,16 +168,14 @@ def index():
         top_result=top_result,
         top_class=top_class,
         predictions=predictions,
+        prediction_url=prediction_url,
+        prediction_key=prediction_key,
     )
 
 
 def main() -> None:
-    host = getattr(config, "HOST", "127.0.0.1")
-    port = int(getattr(config, "PORT", 8080))
-    print(f"Starting Azure Custom Vision app at http://{host}:{port}")
-    if not config_is_valid():
-        print("Warning: config.py still has placeholder values.")
-    app.run(host=host, port=port, debug=False)
+    print(f"Starting Azure Custom Vision app at http://{HOST}:{PORT}")
+    app.run(host=HOST, port=PORT, debug=False)
 
 
 if __name__ == "__main__":
