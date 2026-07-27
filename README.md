@@ -36,7 +36,7 @@ Open http://127.0.0.1:8080 in your browser.
 1. Paste your **Prediction URL** from the Custom Vision portal, for example:
 
    ```
-   https://s23res-prediction.cognitiveservices.azure.com/customvision/v3.0/Prediction/9cab5382-3362-4f4a-8832-d28741592237/classify/iterations/Iteration1/image
+   https://your-resource-prediction.cognitiveservices.azure.com/customvision/v3.0/Prediction/00000000-0000-0000-0000-000000000000/classify/iterations/Iteration1/image
    ```
 
    The app reads the endpoint, project ID, and iteration name from this URL.
